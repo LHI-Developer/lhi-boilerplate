@@ -205,17 +205,17 @@ class LhiInstallCommand extends Command
     {
         $this->info('🛡️  Step 5: Setting up Shield permissions...');
 
-        // Install Shield (will create necessary tables if not exists)
-        $this->callSilently('shield:install', [
+        // Install Shield for admin panel (use call for debugging visibility)
+        $this->call('shield:install', [
             'panel' => 'admin',
             '--no-interaction' => true,
         ]);
         $this->line('   ✓ Shield installed for admin panel');
 
-        // Generate all permissions for resources
-        $this->callSilently('shield:generate', [
+        // Generate all permissions for resources with explicit panel parameter
+        $this->call('shield:generate', [
+            '--panel' => 'admin',
             '--all' => true,
-            '--no-interaction' => true,
         ]);
         $this->line('   ✓ Permissions generated for all resources');
 
