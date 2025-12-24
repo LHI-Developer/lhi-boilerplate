@@ -23,40 +23,55 @@ class LhiInstallCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Install and setup SIT LHI Boilerplate with Filament, Shield, and Multi-tenancy';
+    protected $description = 'Install and setup SIT LHI Boilerplate (Non-Interactive Mode)';
 
     /**
      * Execute the console command.
      */
     public function handle(): int
     {
-        $this->components->info('🚀 SIT LHI Boilerplate Installation');
+        $this->info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        $this->info('🚀 SIT LHI Boilerplate - Automated Installation');
+        $this->info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         $this->newLine();
 
-        // Step 1: Publish Configs
-        $this->step1PublishConfigs();
+        try {
+            // Step 1: Publish Configs
+            $this->step1PublishConfigs();
 
-        // Step 2: Run Migrations
-        $this->step2RunMigrations();
+            // Step 2: Run Migrations
+            $this->step2RunMigrations();
 
-        // Step 3: Setup Shield
-        $this->step3SetupShield();
+            // Step 3: Seed Default School (BEFORE Shield & User)
+            $school = $this->step3SeedDefaultSchool();
 
-        // Step 4: Create Default School
-        $school = $this->step4CreateDefaultSchool();
+            // Step 4: Create Super Admin User (BEFORE Shield)
+            $user = $this->step4CreateSuperAdmin($school);
 
-        // Step 5: Create Super Admin
-        $this->step5CreateSuperAdmin($school);
+            // Step 5: Setup Shield (Non-Interactive)
+            $this->step5SetupShield();
 
-        // Step 6: Clear Cache
-        $this->step6ClearCache();
+            // Step 6: Assign Super Admin Role
+            $this->step6AssignSuperAdminRole($user);
 
-        $this->newLine();
-        $this->components->info('✅ Installation completed successfully!');
-        $this->newLine();
-        $this->displayNextSteps();
+            // Step 7: Clear Cache
+            $this->step7ClearCache();
 
-        return self::SUCCESS;
+            $this->newLine();
+            $this->info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            $this->info('✅ Installation completed successfully!');
+            $this->info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            $this->newLine();
+            $this->displayCredentials($user);
+            $this->displayNextSteps();
+
+            return self::SUCCESS;
+        } catch (\Exception $e) {
+            $this->newLine();
+            $this->error('❌ Installation failed: ' . $e->getMessage());
+            $this->error('Stack trace: ' . $e->getTraceAsString());
+            return self::FAILURE;
+        }
     }
 
     /**
@@ -64,19 +79,21 @@ class LhiInstallCommand extends Command
      */
     private function step1PublishConfigs(): void
     {
-        $this->components->task('Publishing Filament configs', function () {
-            $this->callSilently('vendor:publish', [
-                '--tag' => 'filament-config',
-                '--force' => true,
-            ]);
-        });
+        $this->info('📦 Step 1: Publishing configuration files...');
 
-        $this->components->task('Publishing Shield configs', function () {
-            $this->callSilently('vendor:publish', [
-                '--tag' => 'filament-shield-config',
-                '--force' => true,
-            ]);
-        });
+        $this->callSilently('vendor:publish', [
+            '--tag' => 'filament-config',
+            '--force' => true,
+        ]);
+        $this->line('   ✓ Filament configs published');
+
+        $this->callSilently('vendor:publish', [
+            '--tag' => 'filament-shield-config',
+            '--force' => true,
+        ]);
+        $this->line('   ✓ Shield configs published');
+
+        $this->newLine();
     }
 
     /**
@@ -84,128 +101,173 @@ class LhiInstallCommand extends Command
      */
     private function step2RunMigrations(): void
     {
+        $this->info('🗄️  Step 2: Running database migrations...');
+
         if ($this->option('fresh')) {
-            $this->components->warn('Running fresh migrations (this will drop all tables)...');
+            $this->warn('   ⚠️  Running FRESH migrations (dropping all tables)...');
 
-            if (!$this->confirm('Are you sure you want to drop all tables?', false)) {
-                $this->components->error('Installation cancelled.');
-                exit(1);
-            }
-
-            $this->components->task('Running fresh migrations', function () {
-                $this->call('migrate:fresh', ['--force' => true]);
-            });
+            $this->call('migrate:fresh', [
+                '--force' => true,
+            ]);
         } else {
-            $this->components->task('Running migrations', function () {
-                $this->call('migrate', ['--force' => true]);
-            });
+            $this->call('migrate', [
+                '--force' => true,
+            ]);
         }
+
+        $this->line('   ✓ Database migrations completed');
 
         if ($this->option('seed')) {
-            $this->components->task('Running seeders', function () {
-                $this->call('db:seed', ['--force' => true]);
-            });
+            $this->call('db:seed', ['--force' => true]);
+            $this->line('   ✓ Database seeded');
         }
-    }
 
-    /**
-     * Step 3: Setup Shield permissions and roles.
-     */
-    private function step3SetupShield(): void
-    {
-        $this->components->task('Setting up Shield permissions', function () {
-            // Shield setup will create basic roles and permissions
-            $this->callSilently('shield:generate', [
-                '--all' => true,
-            ]);
-        });
-    }
-
-    /**
-     * Step 4: Create default school.
-     */
-    private function step4CreateDefaultSchool(): School
-    {
         $this->newLine();
-        $this->components->info('📚 Creating Default School');
+    }
 
-        $schoolName = $this->ask('School name', 'SIT LHI Demo');
-        $schoolCode = $this->ask('School code', 'DEMO001');
-        $npsn = $this->ask('NPSN (optional)', '');
+    /**
+     * Step 3: Seed default school.
+     */
+    private function step3SeedDefaultSchool(): School
+    {
+        $this->info('🏫 Step 3: Creating default school...');
 
-        $school = null;
-        $this->components->task("Creating school: {$schoolName}", function () use (&$school, $schoolName, $schoolCode, $npsn) {
+        // Check if school already exists
+        $existingSchool = School::where('code', 'LHI001')->first();
+
+        if ($existingSchool) {
+            $this->line('   ℹ️  Default school already exists, using existing...');
+            $school = $existingSchool;
+        } else {
             $school = School::create([
-                'name' => $schoolName,
-                'code' => $schoolCode,
-                'npsn' => $npsn ?: null,
-                'address' => 'Default Address',
-                'phone' => '021-12345678',
-                'email' => 'contact@' . strtolower($schoolCode) . '.sch.id',
+                'name' => env('DEFAULT_SCHOOL_NAME', 'SIT LHI Demo'),
+                'code' => env('DEFAULT_SCHOOL_CODE', 'LHI001'),
+                'npsn' => env('DEFAULT_SCHOOL_NPSN', ''),
+                'address' => env('DEFAULT_SCHOOL_ADDRESS', 'Jakarta, Indonesia'),
+                'phone' => env('DEFAULT_SCHOOL_PHONE', '021-12345678'),
+                'email' => env('DEFAULT_SCHOOL_EMAIL', 'contact@lhi.sch.id'),
                 'is_active' => true,
             ]);
-        });
+            $this->line('   ✓ Default school created: ' . $school->name);
+        }
+
+        $this->line('   📌 School ID: ' . $school->id);
+        $this->line('   📌 School Code: ' . $school->code);
+        $this->newLine();
 
         return $school;
     }
 
     /**
-     * Step 5: Create Super Admin user.
+     * Step 4: Create super admin user using Eloquent.
      */
-    private function step5CreateSuperAdmin(School $school): void
+    private function step4CreateSuperAdmin(School $school): User
     {
-        $this->newLine();
-        $this->components->info('👤 Creating Super Admin User');
+        $this->info('👤 Step 4: Creating super admin user...');
 
-        $name = $this->ask('Admin name', 'Super Admin');
-        $email = $this->ask('Admin email', 'admin@lhi.sch.id');
-        $password = $this->secret('Admin password (min 8 characters)');
+        $name = env('ADMIN_NAME', 'Super Admin');
+        $email = env('ADMIN_EMAIL', 'admin@lhi.sch.id');
+        $password = env('ADMIN_PASSWORD', 'password');
 
-        if (strlen($password) < 8) {
-            $this->components->error('Password must be at least 8 characters!');
-            exit(1);
+        // Check if user already exists
+        $existingUser = User::where('email', $email)->first();
+
+        if ($existingUser) {
+            $this->line('   ℹ️  User already exists, updating...');
+            $existingUser->update([
+                'name' => $name,
+                'password' => Hash::make($password),
+                'school_id' => $school->id,
+            ]);
+            $user = $existingUser;
+        } else {
+            $user = User::create([
+                'name' => $name,
+                'email' => $email,
+                'password' => Hash::make($password),
+                'school_id' => $school->id,
+            ]);
+            $this->line('   ✓ Super admin user created');
         }
 
-        $user = null;
-        $this->components->task("Creating user: {$email}", function () use (&$user, $name, $email, $password, $school) {
-            // Check if user already exists
-            $existing = User::where('email', $email)->first();
-
-            if ($existing) {
-                $this->components->warn("User {$email} already exists, updating...");
-                $user = $existing;
-                $user->update([
-                    'name' => $name,
-                    'password' => Hash::make($password),
-                    'school_id' => $school->id,
-                ]);
-            } else {
-                $user = User::create([
-                    'name' => $name,
-                    'email' => $email,
-                    'password' => Hash::make($password),
-                    'school_id' => $school->id,
-                ]);
-            }
-        });
-
-        $this->components->task('Assigning super_admin role', function () use ($user) {
-            // Assign super_admin role from Shield
-            $user->assignRole('super_admin');
-        });
-
+        $this->line('   📌 Name: ' . $user->name);
+        $this->line('   📌 Email: ' . $user->email);
+        $this->line('   📌 School: ' . $school->name);
         $this->newLine();
-        $this->components->info("✅ Super Admin created and assigned to school: {$school->name}");
+
+        return $user;
     }
 
     /**
-     * Step 6: Clear all caches.
+     * Step 5: Setup Shield (Non-Interactive).
      */
-    private function step6ClearCache(): void
+    private function step5SetupShield(): void
     {
-        $this->components->task('Clearing application cache', function () {
-            $this->call('optimize:clear');
-        });
+        $this->info('🛡️  Step 5: Setting up Shield permissions...');
+
+        // Install Shield (will create necessary tables if not exists)
+        $this->callSilently('shield:install', [
+            'panel' => 'admin',
+            '--no-interaction' => true,
+        ]);
+        $this->line('   ✓ Shield installed for admin panel');
+
+        // Generate all permissions for resources
+        $this->callSilently('shield:generate', [
+            '--all' => true,
+            '--no-interaction' => true,
+        ]);
+        $this->line('   ✓ Permissions generated for all resources');
+
+        $this->newLine();
+    }
+
+    /**
+     * Step 6: Assign super_admin role programmatically.
+     */
+    private function step6AssignSuperAdminRole(User $user): void
+    {
+        $this->info('👑 Step 6: Assigning super_admin role...');
+
+        // Check if user already has the role
+        if ($user->hasRole('super_admin')) {
+            $this->line('   ℹ️  User already has super_admin role');
+        } else {
+            $user->assignRole('super_admin');
+            $this->line('   ✓ super_admin role assigned to ' . $user->email);
+        }
+
+        $this->newLine();
+    }
+
+    /**
+     * Step 7: Clear all caches.
+     */
+    private function step7ClearCache(): void
+    {
+        $this->info('🧹 Step 7: Clearing application cache...');
+
+        $this->call('optimize:clear');
+        $this->line('   ✓ All caches cleared');
+
+        $this->newLine();
+    }
+
+    /**
+     * Display login credentials.
+     */
+    private function displayCredentials(User $user): void
+    {
+        $this->info('🔑 Login Credentials:');
+        $this->table(
+            ['Field', 'Value'],
+            [
+                ['URL', config('app.url') . '/admin'],
+                ['Email', $user->email],
+                ['Password', env('ADMIN_PASSWORD', 'password')],
+            ]
+        );
+        $this->newLine();
     }
 
     /**
@@ -213,10 +275,10 @@ class LhiInstallCommand extends Command
      */
     private function displayNextSteps(): void
     {
-        $this->line('📝 Next Steps:');
+        $this->info('📝 Next Steps:');
         $this->line('');
-        $this->line('  1. Access admin panel at: ' . config('app.url') . '/admin');
-        $this->line('  2. Login with the credentials you just created');
+        $this->line('  1. Access admin panel: ' . config('app.url') . '/admin');
+        $this->line('  2. Login with credentials above');
         $this->line('  3. Create your first domain module:');
         $this->line('     <fg=green>php artisan lhi:make-module SIAKAD</>');
         $this->line('');
@@ -224,7 +286,7 @@ class LhiInstallCommand extends Command
         $this->line('     <fg=green>php artisan lhi:make-service SIAKAD Student</>');
         $this->line('     <fg=green>php artisan lhi:make-action SIAKAD EnrollStudent</>');
         $this->line('');
-        $this->line('  📚 Documentation: ARCHITECTURE.md');
+        $this->line('📚 Documentation: README.md & ARCHITECTURE.md');
         $this->line('');
     }
 }
