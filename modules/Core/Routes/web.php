@@ -1,8 +1,13 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Modules\Core\Http\Controllers\CoreController;
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::resource('cores', CoreController::class)->names('core');
-});
+/*
+|--------------------------------------------------------------------------
+| Core Module Web Routes
+|--------------------------------------------------------------------------
+|
+| Core module is an infrastructure module and does not have web routes.
+| Domain modules (SIAKAD, Rapor, etc.) will define their own routes.
+|
+*/

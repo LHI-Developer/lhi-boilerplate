@@ -1,8 +1,13 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Modules\Core\Http\Controllers\CoreController;
 
-Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
-    Route::apiResource('cores', CoreController::class)->names('core');
-});
+/*
+|--------------------------------------------------------------------------
+| Core Module API Routes
+|--------------------------------------------------------------------------
+|
+| Core module is an infrastructure module and does not have API routes.
+| Domain modules (SIAKAD, Rapor, etc.) will define their own API routes.
+|
+*/
