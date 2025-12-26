@@ -1,8 +1,17 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Modules\TestModule\Http\Controllers\TestModuleController;
 
-Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
-    Route::apiResource('testmodules', TestModuleController::class)->names('testmodule');
-});
+/*
+|--------------------------------------------------------------------------
+| TestModule API Routes
+|--------------------------------------------------------------------------
+|
+| Define your API routes here.
+|
+*/
+
+// Example:
+// Route::get('/test', function () {
+//     return response()->json(['message' => 'TestModule API']);
+// });
