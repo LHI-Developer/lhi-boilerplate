@@ -3,6 +3,7 @@
 namespace Modules\Core\Filament\Resources\UserResource\Schemas;
 
 use Filament\Forms;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class UserForm
@@ -11,7 +12,7 @@ class UserForm
     {
         return $schema
             ->schema([
-                Forms\Components\Section::make('User Information')
+                Section::make('User Information')
                     ->schema([
                         Forms\Components\TextInput::make('name')
                             ->required()
@@ -33,7 +34,7 @@ class UserForm
                     ])
                     ->columns(2),
 
-                Forms\Components\Section::make('School & Roles')
+                Section::make('School & Roles')
                     ->schema([
                         Forms\Components\Select::make('school_id')
                             ->relationship('school', 'name')
