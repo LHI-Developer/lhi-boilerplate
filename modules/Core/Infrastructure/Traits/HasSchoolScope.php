@@ -11,9 +11,13 @@ use Illuminate\Database\Eloquent\Model;
  * Implements multi-tenancy for SIT LHI by automatically scoping
  * queries to the current school context.
  * 
+ * IMPORTANT: Do NOT use this trait on the User model itself!
+ * The User model should only have the school() relationship.
+ * This trait is for other models that need school-based scoping.
+ * 
  * Usage:
  * - Add 'school_id' column to your table migration
- * - Use this trait in your model
+ * - Use this trait in your model (NOT User model)
  * - All queries will automatically filter by current school
  */
 trait HasSchoolScope
@@ -42,13 +46,20 @@ trait HasSchoolScope
 
     /**
      * Check if school context is available.
+     * 
+     * Uses hasUser() to prevent infinite recursion when User model
+     * is being loaded during authentication.
      *
      * @return bool
      */
     protected static function hasSchoolContext(): bool
     {
-        // Check if user is authenticated
-        if (!auth()->check()) {
+        // CRITICAL: Use hasUser() instead of check() to prevent infinite recursion.
+        // hasUser() returns true only if the user is already loaded in memory,
+        // while check() may trigger a database query to load the user.
+        $guard = auth()->guard();
+
+        if (!method_exists($guard, 'hasUser') || !$guard->hasUser()) {
             return false;
         }
 
@@ -65,7 +76,9 @@ trait HasSchoolScope
      */
     protected static function getCurrentSchoolId(): ?int
     {
-        if (!auth()->check()) {
+        $guard = auth()->guard();
+
+        if (!method_exists($guard, 'hasUser') || !$guard->hasUser()) {
             return null;
         }
 

@@ -6,14 +6,20 @@ namespace Modules\Core\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Modules\Core\Infrastructure\BaseModel;
-use Modules\Core\Infrastructure\Traits\HasSchoolScope;
 use Spatie\Permission\Traits\HasRoles;
 
+/**
+ * User Model
+ * 
+ * NOTE: This model does NOT use HasSchoolScope trait.
+ * User is the PROVIDER of school context (via school_id),
+ * not a CONSUMER of the scope. Other domain models should
+ * use HasSchoolScope to filter by the authenticated user's school.
+ */
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles, HasSchoolScope;
+    use HasFactory, Notifiable, HasRoles;
 
     /**
      * The attributes that are mass assignable.
